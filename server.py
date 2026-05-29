@@ -99,7 +99,8 @@ def get_endpoint(hostname: str) -> dict:
             "filters": [{"field": "hostname", "operator": "in", "value": [hostname]}],
         }
     })
-    endpoints = result.get("reply", {}).get("endpoints", [])
+    reply = result.get("reply", {})
+    endpoints = reply if isinstance(reply, list) else reply.get("endpoints", [])
     if not endpoints:
         return {"error": f"Endpoint {hostname} not found"}
     e = endpoints[0]
