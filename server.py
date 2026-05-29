@@ -94,13 +94,11 @@ def get_alert(alert_id: str) -> dict:
 @mcp.tool()
 def get_endpoint(hostname: str) -> dict:
     """Get endpoint details from Cortex XDR by hostname."""
-    result = _req("endpoints/get_endpoints", {
-        "request_data": {
-            "filters": [{"field": "hostname", "operator": "in", "value": [hostname]}],
-        }
-    })
+    result = _req("endpoints/get_endpoints", {"request_data": {}})
     reply = result.get("reply", {})
-    endpoints = reply if isinstance(reply, list) else reply.get("endpoints", [])
+    all_endpoints = reply if isinstance(reply, list) else reply.get("endpoints", [])
+    hn = hostname.lower()
+    endpoints = [e for e in all_endpoints if hn in (e.get("host_name") or "").lower()]
     if not endpoints:
         return {"error": f"Endpoint {hostname} not found"}
     e = endpoints[0]
