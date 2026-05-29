@@ -28,8 +28,10 @@ The following environment variables are required:
 
 ## Claude Code Setup
 
+After running `mise install` and `uv sync`, register the server using the venv's Python so it works regardless of what's on your shell PATH:
+
 ```bash
-claude mcp add --scope user cortex-xdr -- python3 /path/to/server.py
+claude mcp add --scope user cortex-xdr -- /path/to/cortex-mcp/.venv/bin/python /path/to/cortex-mcp/server.py
 ```
 
 Ensure the required environment variables are available in the shell session where Claude Code runs.
