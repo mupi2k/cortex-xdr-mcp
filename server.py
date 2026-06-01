@@ -60,6 +60,16 @@ def _shape_alert(a: dict) -> dict:
     }
 
 
+def _first_from_events(events: list[dict], *keys: str):
+    """Return the first non-None value for any of the given keys across all events."""
+    for key in keys:
+        for e in events:
+            v = e.get(key)
+            if v is not None:
+                return v
+    return None
+
+
 @mcp.tool()
 def get_alert(alert_id: str) -> dict:
     """Get full details for a Cortex XDR alert including actor, asset, and process info."""
@@ -67,6 +77,7 @@ def get_alert(alert_id: str) -> dict:
     if not alerts:
         return {"error": f"Alert {alert_id} not found"}
     a = alerts[0]
+    events = a.get("events") or []
     return {
         "alert_id": a.get("alert_id"),
         "name": a.get("name"),
@@ -74,20 +85,24 @@ def get_alert(alert_id: str) -> dict:
         "severity": a.get("severity"),
         "category": a.get("category"),
         "action_pretty": a.get("action_pretty"),
-        "actor_process_image_name": a.get("actor_process_image_name"),
-        "actor_process_command_line": a.get("actor_process_command_line"),
-        "actor_process_image_path": a.get("actor_process_image_path"),
-        "actor_effective_username": a.get("actor_effective_username"),
-        "causality_actor_process_image_name": a.get("causality_actor_process_image_name"),
-        "causality_actor_process_command_line": a.get("causality_actor_process_command_line"),
+        # Actor fields — prefer events array over top-level (top-level is often null)
+        "actor_process_image_name": _first_from_events(events, "actor_process_image_name") or a.get("actor_process_image_name"),
+        "actor_process_command_line": _first_from_events(events, "actor_process_command_line") or a.get("actor_process_command_line"),
+        "actor_process_image_path": _first_from_events(events, "actor_process_image_path") or a.get("actor_process_image_path"),
+        "actor_effective_username": _first_from_events(events, "actor_effective_username", "user_name") or a.get("actor_effective_username"),
+        # Causality (CGO) fields — only available in events array
+        "causality_actor_process_image_name": _first_from_events(events, "causality_actor_process_image_name") or a.get("causality_actor_process_image_name"),
+        "causality_actor_process_command_line": _first_from_events(events, "causality_actor_process_command_line") or a.get("causality_actor_process_command_line"),
+        "causality_actor_process_signature_vendor": _first_from_events(events, "causality_actor_process_signature_vendor"),
         "host_name": a.get("host_name"),
         "host_ip": a.get("host_ip"),
-        "os_actor_process_image_name": a.get("os_actor_process_image_name"),
-        "os_actor_process_command_line": a.get("os_actor_process_command_line"),
+        "os_actor_process_image_name": _first_from_events(events, "os_actor_process_image_name") or a.get("os_actor_process_image_name"),
+        "os_actor_process_command_line": _first_from_events(events, "os_actor_process_command_line") or a.get("os_actor_process_command_line"),
         "mitre_tactic_id_and_name": a.get("mitre_tactic_id_and_name"),
         "mitre_technique_id_and_name": a.get("mitre_technique_id_and_name"),
         "detection_timestamp": a.get("detection_timestamp"),
         "source": a.get("source"),
+        "event_count": len(events),
     }
 
 
@@ -201,16 +216,36 @@ def _xql(query: str, timeframe: dict | None = None, timeout_secs: int = 30) -> l
 @mcp.tool()
 def get_alert_process_details(alert_id: str) -> list[dict]:
     """Get the process causality chain for a Cortex XDR alert using XQL."""
-    # First get the alert metadata to extract host_name and timestamp
     alerts = _fetch_alerts([{"field": "alert_id_list", "operator": "in", "value": [int(alert_id)]}])
     if not alerts:
         return [{"error": f"Alert {alert_id} not found"}]
     a = alerts[0]
-    host_name = a.get("host_name", "")
-    ts_ms = a.get("detection_timestamp", 0)
-    # Query xdr_data for process events on that host within ±5 minutes of the alert
-    timeframe = {"from": ts_ms - 300_000, "to": ts_ms + 300_000}
-    query = f"""
+    events = a.get("events") or []
+
+    # Collect unique causality IDs from all events — more accurate than a time window
+    causality_ids = list({
+        e["actor_process_causality_id"]
+        for e in events
+        if e.get("actor_process_causality_id")
+    })
+
+    if causality_ids:
+        id_list = ", ".join(f'"{cid}"' for cid in causality_ids)
+        query = f"""
+dataset = xdr_data
+| filter actor_process_causality_id in ({id_list})
+| fields _time, actor_process_image_name, actor_process_command_line, actor_primary_username, causality_actor_process_image_name, causality_actor_process_command_line, action_process_image_name, action_process_image_command_line
+| sort asc _time
+| limit 100
+"""
+        ts_ms = a.get("detection_timestamp", 0)
+        timeframe = {"from": ts_ms - 3_600_000, "to": ts_ms + 3_600_000}
+    else:
+        # Fallback to time window if no causality IDs available
+        host_name = a.get("host_name", "")
+        ts_ms = a.get("detection_timestamp", 0)
+        timeframe = {"from": ts_ms - 300_000, "to": ts_ms + 300_000}
+        query = f"""
 dataset = xdr_data
 | filter agent_hostname = "{host_name}" and event_type = 1
 | fields _time, actor_process_image_name, actor_process_command_line, actor_primary_username, causality_actor_process_image_name, causality_actor_process_command_line, action_process_image_name, action_process_image_command_line
