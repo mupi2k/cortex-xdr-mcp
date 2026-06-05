@@ -108,12 +108,21 @@ def get_alert(alert_id: str) -> dict:
 
 @mcp.tool()
 def get_endpoint(hostname: str) -> dict:
-    """Get endpoint details from Cortex XDR by hostname."""
-    result = _req("endpoints/get_endpoints", {"request_data": {}})
+    """Get endpoint details from Cortex XDR by hostname, including device group membership."""
+    result = _req("endpoints/get_endpoint", {
+        "request_data": {
+            "filters": [{"field": "hostname", "operator": "in", "value": [hostname]}]
+        }
+    })
     reply = result.get("reply", {})
-    all_endpoints = reply if isinstance(reply, list) else reply.get("endpoints", [])
-    hn = hostname.lower()
-    endpoints = [e for e in all_endpoints if hn in (e.get("host_name") or "").lower()]
+    endpoints = reply.get("endpoints", [])
+    if not endpoints:
+        # Fallback: fetch all and filter client-side
+        result2 = _req("endpoints/get_endpoint", {"request_data": {}})
+        reply2 = result2.get("reply", {})
+        all_endpoints = reply2.get("endpoints", [])
+        hn = hostname.lower()
+        endpoints = [e for e in all_endpoints if hn in (e.get("endpoint_name") or e.get("host_name") or "").lower()]
     if not endpoints:
         return {"error": f"Endpoint {hostname} not found"}
     e = endpoints[0]
@@ -124,13 +133,16 @@ def get_endpoint(hostname: str) -> dict:
         "endpoint_status": e.get("endpoint_status"),
         "os_type": e.get("os_type"),
         "os_version": e.get("os_version"),
+        "operating_system": e.get("operating_system"),
         "ip": e.get("ip"),
         "users": e.get("users"),
         "domain": e.get("domain"),
+        "group_name": e.get("group_name"),
+        "active_directory": e.get("active_directory"),
+        "assigned_prevention_policy": e.get("assigned_prevention_policy"),
         "install_date": e.get("install_date"),
         "last_seen": e.get("last_seen"),
         "operational_status": e.get("operational_status"),
-        "group_name": e.get("group_name"),
     }
 
 
