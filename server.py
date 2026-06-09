@@ -225,6 +225,86 @@ def _xql(query: str, timeframe: dict | None = None, timeout_secs: int = 30) -> l
     raise RuntimeError("XQL query timed out")
 
 
+def _decode_encoded_command(cmd: str) -> str | None:
+    """Extract and decode a PowerShell -EncodedCommand / -enc base64 payload.
+    Handles truncated payloads (Cortex XDR truncates long command lines) by
+    decoding as many complete UTF-16-LE characters as the truncated string allows."""
+    import base64, re
+    m = re.search(r'(?:-EncodedCommand|-enc|-ec)\s+([A-Za-z0-9+/=]+)', cmd, re.IGNORECASE)
+    if not m:
+        return None
+    b64 = m.group(1)
+    # Add padding and decode; trim to complete UTF-16-LE pairs (2 bytes each)
+    padded = b64 + "=" * (-len(b64) % 4)
+    try:
+        raw = base64.b64decode(padded)
+        truncated = len(raw) % 2 != 0
+        text = raw[: len(raw) - len(raw) % 2].decode("utf-16-le").strip()
+        return (text + " …[truncated]") if truncated or not b64.endswith("=") else text
+    except Exception:
+        return None
+
+
+@mcp.tool()
+def get_alert_child_processes(alert_id: str, child_process_name: str | None = None) -> list[dict]:
+    """Get processes spawned by the actor within a Cortex XDR alert's causal chain.
+    Use this to see what an alert's actor process actually executed (e.g. what PowerShell
+    commands claude.exe ran). Optionally filter by child process name (e.g. 'powershell.exe').
+    Base64-encoded PowerShell -EncodedCommand payloads are automatically decoded."""
+    alerts = _fetch_alerts([{"field": "alert_id_list", "operator": "in", "value": [int(alert_id)]}])
+    if not alerts:
+        return [{"error": f"Alert {alert_id} not found"}]
+    a = alerts[0]
+    events = a.get("events") or []
+    ts_ms = a.get("detection_timestamp", 0)
+    timeframe = {"from": ts_ms - 3_600_000, "to": ts_ms + 3_600_000}
+
+    causality_ids = list({
+        e["actor_process_causality_id"]
+        for e in events
+        if e.get("actor_process_causality_id")
+    })
+
+    child_filter = f'and action_process_image_name = "{child_process_name}"' if child_process_name else ""
+
+    if causality_ids:
+        id_list = ", ".join(f'"{cid}"' for cid in causality_ids)
+        query = f"""
+dataset = xdr_data
+| filter actor_process_causality_id in ({id_list}) and action_process_image_name != null {child_filter}
+| fields _time, actor_process_image_name, actor_process_command_line, action_process_image_name, action_process_image_command_line, actor_primary_username
+| sort asc _time
+| limit 100
+"""
+    else:
+        host_name = a.get("host_name", "")
+        query = f"""
+dataset = xdr_data
+| filter agent_hostname = "{host_name}" and action_process_image_name != null {child_filter}
+| fields _time, actor_process_image_name, actor_process_command_line, action_process_image_name, action_process_image_command_line, actor_primary_username
+| sort asc _time
+| limit 50
+"""
+
+    rows = _xql(query, timeframe=timeframe)
+    results = []
+    for row in rows:
+        child_cmd = row.get("action_process_image_command_line") or ""
+        entry = {
+            "time": row.get("_time"),
+            "parent_process": row.get("actor_process_image_name"),
+            "parent_command_line": row.get("actor_process_command_line"),
+            "child_process": row.get("action_process_image_name"),
+            "child_command_line": child_cmd,
+            "username": row.get("actor_primary_username"),
+        }
+        decoded = _decode_encoded_command(child_cmd)
+        if decoded:
+            entry["decoded_command"] = decoded
+        results.append(entry)
+    return results
+
+
 @mcp.tool()
 def get_alert_process_details(alert_id: str) -> list[dict]:
     """Get the process causality chain for a Cortex XDR alert using XQL."""
