@@ -11,7 +11,7 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server that exposes Palo Alto Net
 
 ```bash
 mise install       # installs Python and uv
-uv sync            # installs dependencies into .venv
+mise run install   # installs dependencies into .venv
 ```
 
 ## Configuration
