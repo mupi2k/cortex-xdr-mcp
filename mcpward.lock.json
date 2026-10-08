@@ -1,0 +1,279 @@
+{
+  "protocolVersion": "2025-11-25",
+  "capabilities": {
+    "tools": {
+      "listChanged": true
+    },
+    "resources": {
+      "subscribe": false,
+      "listChanged": false
+    },
+    "prompts": {
+      "listChanged": false
+    }
+  },
+  "tools": {
+    "get_alert": {
+      "descriptionHash": "sha256:811d47dbe7113d29d8cf07d82d7471083e664ab08e3a542ee50c4232f0833d96",
+      "description": "Get full details for a Cortex XDR alert including actor, asset, and process info.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "alert_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "alert_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "annotations": null
+    },
+    "get_endpoint": {
+      "descriptionHash": "sha256:aac58f53c9e03e1b79310f89a9d816584ba57a429d6623ce9e67e33a0497595a",
+      "description": "Get endpoint details from Cortex XDR by hostname, including device group membership.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "hostname": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hostname"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "annotations": null
+    },
+    "search_alerts": {
+      "descriptionHash": "sha256:08b75161a4b9e25794328c54e79def82288f0d0335fe85e07ba179483c58cbfd",
+      "description": "Search Cortex XDR alerts by hostname, username, severity (LOW/MEDIUM/HIGH/CRITICAL), and/or alert name.\nFetches recent alerts (default: last 7 days) and filters client-side.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "alert_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "days_back": {
+            "default": 7,
+            "type": "integer"
+          },
+          "hostname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "limit": {
+            "default": 25,
+            "type": "integer"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      },
+      "annotations": null
+    },
+    "get_alerts_for_endpoint": {
+      "descriptionHash": "sha256:50907e3d6773f699f14a2dedb53803d19e70a531593bcbd4fdeb0aa211b1d226",
+      "description": "Get recent Cortex XDR alerts for a given hostname.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "days_back": {
+            "default": 7,
+            "type": "integer"
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hostname"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      },
+      "annotations": null
+    },
+    "get_alert_child_processes": {
+      "descriptionHash": "sha256:eca8f78cfdee0de2b7f600490da6c6a42863242c21a60fffee87ab8f2f299bcc",
+      "description": "Get processes spawned by the actor within a Cortex XDR alert's causal chain.\nUse this to see what an alert's actor process actually executed (e.g. what PowerShell\ncommands claude.exe ran). Optionally filter by child process name (e.g. 'powershell.exe').\nBase64-encoded PowerShell -EncodedCommand payloads are automatically decoded.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "alert_id": {
+            "type": "string"
+          },
+          "child_process_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "alert_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      },
+      "annotations": null
+    },
+    "get_alert_process_details": {
+      "descriptionHash": "sha256:55cb73cf2f6bba71e77ab749b08893f67b953792004953880f56338b60e97342",
+      "description": "Get the process causality chain for a Cortex XDR alert using XQL.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "alert_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "alert_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      },
+      "annotations": null
+    }
+  },
+  "meta": {
+    "schemaVersion": 2,
+    "mcpwardVersion": "1.1.1",
+    "canonicalVersion": 2,
+    "capturedAt": "2026-10-08T17:54:19.090Z",
+    "serverName": "Cortex XDR",
+    "serverVersion": "3.3.1",
+    "target": {
+      "transport": "stdio",
+      "identity": "/Users/mike.porter/dev/cortex-mcp/.venv/bin/python /Users/mike.porter/dev/cortex-mcp/server.py"
+    },
+    "authContext": {
+      "kind": "none",
+      "keys": [],
+      "fingerprint": null,
+      "label": null
+    },
+    "environment": {
+      "ci": false,
+      "nodeVersion": "v24.14.0",
+      "platform": "darwin"
+    }
+  }
+}
