@@ -2,7 +2,7 @@
 name = "cortex-xdr-mcp"
 version = "0.1.1"
 description = "MCP server for Palo Alto Networks Cortex XDR alert investigation"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=4.0.11",
     # Direct floors on transitive deps (pulled in via fastmcp/mcp) -- each is
